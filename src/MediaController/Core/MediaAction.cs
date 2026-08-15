@@ -4,7 +4,10 @@ public enum MediaAction
 {
     Next,
     Previous,
-    PlayPause
+    PlayPause,
+    VolumeUp,
+    VolumeDown,
+    Mute
 }
 
 /// <summary>

@@ -16,8 +16,15 @@ public sealed class MediaKeyFallbackService
         {
             MediaAction.Next => VirtualKey.VK_MEDIA_NEXT_TRACK,
             MediaAction.Previous => VirtualKey.VK_MEDIA_PREV_TRACK,
-            _ => VirtualKey.VK_MEDIA_PLAY_PAUSE
+            MediaAction.PlayPause => VirtualKey.VK_MEDIA_PLAY_PAUSE,
+            _ => (ushort)0
         };
+
+        if (vk == 0)
+        {
+            Logger.Warn("Media-key fallback ignored non-media action " + action + ".");
+            return;
+        }
 
         try
         {

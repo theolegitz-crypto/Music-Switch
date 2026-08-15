@@ -17,8 +17,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\MediaController.ico</ApplicationIcon>
 
-    <!-- v0.4.3: lossless rapid-skip FIFO + non-blocking hotkey intake -->
-    <Version>0.4.3</Version>
+    <!-- v0.4.5: selected music-player session volume + final application icon -->
+    <Version>0.4.5</Version>
 
     <!-- Velopack must run before WPF's generated entry point, so App.xaml is a normal Page
          and App.xaml.cs owns Main(). -->
@@ -48,6 +48,7 @@
 
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>

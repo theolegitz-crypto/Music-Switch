@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, for example 0.4.3"
+        description: "Version, for example 0.4.5"
         required: true
-        default: "0.4.3"
+        default: "0.4.5"
   push:
     tags:
       - "v*"
@@ -44,12 +44,23 @@ jobs:
       - name: Publish application
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           dotnet publish src/MediaController/MediaController.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
             -o publish `
             /p:Version=${{ steps.version.outputs.version }}
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed with exit code $LASTEXITCODE."
+          }
+
+          if (-not (Test-Path publish)) {
+            throw "dotnet publish reported success but the publish directory was not created."
+          }
+
           Set-Content -Path publish/update-source.txt `
             -Value "https://github.com/${{ github.repository }}" `
             -Encoding UTF8

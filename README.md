@@ -30,7 +30,7 @@ Upload this project to a GitHub repository. The included `.github/workflows/rele
 1. open **Actions**;
 2. select **Build installer and publish release**;
 3. click **Run workflow**;
-4. enter a version such as `0.4.3`.
+4. enter a version such as `0.4.5`.
 
 GitHub Actions publishes a self-contained app, writes the current repository URL into `update-source.txt`, creates Velopack full/delta packages and Setup.exe, and uploads the release assets to GitHub Releases.
 
@@ -47,4 +47,5 @@ Regular IDE / `dotnet run` builds intentionally have updates disabled because th
 - GSMTC (`Windows.Media.Control`)
 - Win32 `RegisterHotKey`
 - `SendInput` media-key fallback
+- Windows Core Audio (`IAudioEndpointVolume`) for master-volume control
 - Velopack 1.2.0 for installer and updates

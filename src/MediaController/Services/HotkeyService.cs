@@ -50,7 +50,7 @@ public sealed class HotkeyService : IDisposable
     }
 
     /// <summary>
-    /// Re-registers all three hotkeys. Returns the actions whose combination could not be taken,
+    /// Re-registers all configured hotkeys. Returns the actions whose combination could not be taken,
     /// so the caller can restore the previous, working configuration.
     /// </summary>
     public IReadOnlyList<MediaAction> Apply(AppSettings settings)
@@ -187,9 +187,9 @@ public sealed class HotkeyService : IDisposable
         }
     }
 
-    private static uint ModifiersOf(HotkeySettings hotkey)
+    private static uint ModifiersOf(HotkeySettings hotkey, bool noRepeat = true)
     {
-        var modifiers = NativeMethods.MOD_NOREPEAT;
+        var modifiers = noRepeat ? NativeMethods.MOD_NOREPEAT : 0u;
         if (hotkey.Ctrl) modifiers |= NativeMethods.MOD_CONTROL;
         if (hotkey.Alt) modifiers |= NativeMethods.MOD_ALT;
         if (hotkey.Shift) modifiers |= NativeMethods.MOD_SHIFT;
@@ -202,6 +202,9 @@ public sealed class HotkeyService : IDisposable
         yield return (MediaAction.Next, settings.NextHotkey);
         yield return (MediaAction.Previous, settings.PreviousHotkey);
         yield return (MediaAction.PlayPause, settings.PlayPauseHotkey);
+        yield return (MediaAction.VolumeUp, settings.VolumeUpHotkey);
+        yield return (MediaAction.VolumeDown, settings.VolumeDownHotkey);
+        yield return (MediaAction.Mute, settings.MuteHotkey);
     }
 
     private bool TryRegister(MediaAction action, HotkeySettings hotkey)
@@ -217,7 +220,10 @@ public sealed class HotkeyService : IDisposable
             return false;
         }
 
-        var modifiers = ModifiersOf(hotkey);
+        // Volume up/down intentionally allow key-repeat while held. Media transport and Mute
+        // keep MOD_NOREPEAT so one physical press always means one action.
+        var allowRepeat = action is MediaAction.VolumeUp or MediaAction.VolumeDown;
+        var modifiers = ModifiersOf(hotkey, noRepeat: !allowRepeat);
         var vk = (uint)KeyInterop.VirtualKeyFromKey(hotkey.Key);
         if (vk == 0)
         {

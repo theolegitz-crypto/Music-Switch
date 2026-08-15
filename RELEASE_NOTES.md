@@ -1,9 +1,10 @@
-# Media Controller 0.4.3
+# Media Controller 0.4.5
 
-- Reworked rapid media control into a lossless FIFO command queue.
-- Every hotkey press is captured immediately even while the player is still switching tracks.
-- Rapid Next/Previous bursts stay pinned to the same GSMTC player and no longer drift to Telegram.
-- Removed the per-press pre-wait that could make fast skipping appear to stop responding.
-- Keeps queued presses while Yandex/Spotify briefly recreates its media session, then drains them in order.
-- Added a short retry for players that temporarily refuse a skip during track transition.
-- Popup/metadata/artwork work remains fully outside the command path and cannot block skipping.
+## What's new
+
+- Music-only volume control through the Windows audio session of the selected/current media player.
+- Volume Up, Volume Down and Mute hotkeys do not change Windows master volume.
+- Configurable volume step and Music Volume controls in Settings.
+- Final purple application icon applied consistently to the executable, tray, Settings, shortcuts and Velopack installer.
+- The icon is packaged as a conservative multi-resolution Win32 ICO to keep GitHub/Windows builds reliable.
+- Keeps the rapid-skip queue and player-session locking from the previous release.

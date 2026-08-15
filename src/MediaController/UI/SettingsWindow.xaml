@@ -175,6 +175,70 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ===== VOLUME ===== -->
+                <TextBlock Text="VOLUME" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Style="{StaticResource GlassCardStyle}" Margin="0,0,0,18">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Music volume" Style="{StaticResource PrimaryTextStyle}"/>
+                                <TextBlock x:Name="VolumeStateText" Text="Current media player"
+                                           Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="VolumeValueText" Grid.Column="1" Text="0%"
+                                       Style="{StaticResource TrackTitleStyle}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,4">
+                            <Button Content="−" Width="72" Height="36"
+                                    Style="{StaticResource GlassButtonStyle}"
+                                    ToolTip="Volume down" Click="OnVolumeDownClick"/>
+                            <Button x:Name="MuteButton" Content="Mute" Width="104" Height="36" Margin="12,0"
+                                    Style="{StaticResource GlassButtonStyle}"
+                                    ToolTip="Mute / unmute" Click="OnMuteClick"/>
+                            <Button Content="+" Width="72" Height="36"
+                                    Style="{StaticResource GlassButtonStyle}"
+                                    ToolTip="Volume up" Click="OnVolumeUpClick"/>
+                        </StackPanel>
+
+                        <Border Style="{StaticResource GlassSeparatorStyle}"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Step per press" Style="{StaticResource PrimaryTextStyle}" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1" x:Name="VolumeStepBox" Width="100"
+                                      Style="{StaticResource GlassComboBoxStyle}"
+                                      ItemStringFormat="{}{0}%"/>
+                        </Grid>
+
+                        <Border Style="{StaticResource GlassSeparatorStyle}"/>
+
+                        <TextBlock Text="Volume up" Style="{StaticResource SecondaryTextStyle}" Margin="2,0,0,6"/>
+                        <controls:HotkeyCaptureControl x:Name="VolumeUpHotkeyBox"/>
+
+                        <Border Style="{StaticResource GlassSeparatorStyle}"/>
+
+                        <TextBlock Text="Volume down" Style="{StaticResource SecondaryTextStyle}" Margin="2,0,0,6"/>
+                        <controls:HotkeyCaptureControl x:Name="VolumeDownHotkeyBox"/>
+
+                        <Border Style="{StaticResource GlassSeparatorStyle}"/>
+
+                        <TextBlock Text="Mute / Unmute" Style="{StaticResource SecondaryTextStyle}" Margin="2,0,0,6"/>
+                        <controls:HotkeyCaptureControl x:Name="MuteHotkeyBox"/>
+
+                        <TextBlock Text="Volume Up / Down repeat while the hotkey is held. Only the audio session of the selected/current media player is changed; Windows, games, Discord and other apps keep their own volume."
+                                   Style="{StaticResource MutedTextStyle}"
+                                   TextWrapping="Wrap" TextTrimming="None" Margin="2,14,0,0"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- ===== NOTIFICATIONS ===== -->
                 <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SectionHeaderStyle}"/>
                 <Border Style="{StaticResource GlassCardStyle}" Margin="0,0,0,18">

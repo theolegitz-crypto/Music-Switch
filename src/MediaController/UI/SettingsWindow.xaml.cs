@@ -13,12 +13,14 @@ namespace MediaController.UI;
 public partial class SettingsWindow : Window
 {
     private static readonly double[] DurationOptions = { 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0 };
+    private static readonly int[] VolumeStepOptions = { 2, 5, 10, 15, 20 };
 
     private readonly SettingsService _settings;
     private readonly MediaSessionService _sessions;
     private readonly MediaControlService _control;
     private readonly HotkeyService _hotkeys;
     private readonly StartupService _startup;
+    private readonly VolumeService _volume;
     private readonly UpdateService _updates;
 
     public SettingsWindow(
@@ -27,6 +29,7 @@ public partial class SettingsWindow : Window
         MediaControlService control,
         HotkeyService hotkeys,
         StartupService startup,
+        VolumeService volume,
         UpdateService updates)
     {
         InitializeComponent();
@@ -36,6 +39,7 @@ public partial class SettingsWindow : Window
         _control = control;
         _hotkeys = hotkeys;
         _startup = startup;
+        _volume = volume;
         _updates = updates;
 
         foreach (var box in HotkeyBoxes())
@@ -45,10 +49,12 @@ public partial class SettingsWindow : Window
         }
 
         DurationBox.ItemsSource = DurationOptions;
+        VolumeStepBox.ItemsSource = VolumeStepOptions;
 
         Load(settings.Current);
 
         _sessions.Changed += OnSessionsChanged;
+        _volume.StateChanged += OnVolumeStateChanged;
         _updates.StateChanged += OnUpdateStateChanged;
         RefreshUpdateUi(_updates.State);
         Closed += OnClosed;
@@ -59,6 +65,9 @@ public partial class SettingsWindow : Window
         yield return NextHotkeyBox;
         yield return PreviousHotkeyBox;
         yield return PlayPauseHotkeyBox;
+        yield return VolumeUpHotkeyBox;
+        yield return VolumeDownHotkeyBox;
+        yield return MuteHotkeyBox;
     }
 
     private void Load(AppSettings settings)
@@ -66,6 +75,12 @@ public partial class SettingsWindow : Window
         NextHotkeyBox.Hotkey = settings.NextHotkey;
         PreviousHotkeyBox.Hotkey = settings.PreviousHotkey;
         PlayPauseHotkeyBox.Hotkey = settings.PlayPauseHotkey;
+        VolumeUpHotkeyBox.Hotkey = settings.VolumeUpHotkey;
+        VolumeDownHotkeyBox.Hotkey = settings.VolumeDownHotkey;
+        MuteHotkeyBox.Hotkey = settings.MuteHotkey;
+        VolumeStepBox.SelectedItem = VolumeStepOptions
+            .OrderBy(option => Math.Abs(option - settings.VolumeStepPercent))
+            .First();
 
         var options = new List<PlayerOption> { new(null, "Auto") };
         foreach (var session in _sessions.GetSessions())
@@ -95,6 +110,13 @@ public partial class SettingsWindow : Window
         AutoUpdateBox.IsChecked = settings.CheckForUpdatesAutomatically;
 
         RefreshNowPlaying();
+        RefreshVolumeUi(_volume.GetState());
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        RefreshVolumeUi(_volume.GetState());
     }
 
     // --- live now playing block ---
@@ -207,6 +229,42 @@ public partial class SettingsWindow : Window
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e) => _ = _control.PlayPauseAsync();
 
+    // --- selected music-player volume ---
+
+    private void OnVolumeStateChanged(VolumeState state)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            RefreshVolumeUi(state);
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(new Action(() => RefreshVolumeUi(state)));
+        }
+    }
+
+    private void RefreshVolumeUi(VolumeState state)
+    {
+        VolumeValueText.Text = state.IsAvailable ? state.Percent + "%" : "—";
+        VolumeStateText.Text = state.IsAvailable
+            ? state.Player + (state.IsMuted ? " · Muted" : string.Empty)
+            : "No matching music audio session";
+        MuteButton.Content = state.IsMuted ? "Unmute" : "Mute";
+        MuteButton.IsEnabled = state.IsAvailable;
+    }
+
+    private int SelectedVolumeStep() =>
+        VolumeStepBox.SelectedItem is int step ? step : _settings.Current.VolumeStepPercent;
+
+    private void OnVolumeUpClick(object sender, RoutedEventArgs e) =>
+        _volume.Adjust(SelectedVolumeStep());
+
+    private void OnVolumeDownClick(object sender, RoutedEventArgs e) =>
+        _volume.Adjust(-SelectedVolumeStep());
+
+    private void OnMuteClick(object sender, RoutedEventArgs e) =>
+        _volume.ToggleMute();
+
     // --- updates ---
 
     private void OnUpdateStateChanged(UpdateState state)
@@ -290,6 +348,10 @@ public partial class SettingsWindow : Window
         updated.NextHotkey = NextHotkeyBox.Hotkey.Clone();
         updated.PreviousHotkey = PreviousHotkeyBox.Hotkey.Clone();
         updated.PlayPauseHotkey = PlayPauseHotkeyBox.Hotkey.Clone();
+        updated.VolumeUpHotkey = VolumeUpHotkeyBox.Hotkey.Clone();
+        updated.VolumeDownHotkey = VolumeDownHotkeyBox.Hotkey.Clone();
+        updated.MuteHotkey = MuteHotkeyBox.Hotkey.Clone();
+        updated.VolumeStepPercent = VolumeStepBox.SelectedItem is int step ? step : 5;
         updated.PreferredPlayer = (PlayerBox.SelectedItem as PlayerOption)?.Id;
         updated.StartWithWindows = StartupBox.IsChecked == true;
         updated.ShowTrackPopup = ShowPopupBox.IsChecked == true;
@@ -299,7 +361,10 @@ public partial class SettingsWindow : Window
 
         if (!ValidateHotkey(NextHotkeyBox, updated.NextHotkey) ||
             !ValidateHotkey(PreviousHotkeyBox, updated.PreviousHotkey) ||
-            !ValidateHotkey(PlayPauseHotkeyBox, updated.PlayPauseHotkey))
+            !ValidateHotkey(PlayPauseHotkeyBox, updated.PlayPauseHotkey) ||
+            !ValidateHotkey(VolumeUpHotkeyBox, updated.VolumeUpHotkey) ||
+            !ValidateHotkey(VolumeDownHotkeyBox, updated.VolumeDownHotkey) ||
+            !ValidateHotkey(MuteHotkeyBox, updated.MuteHotkey))
         {
             return;
         }
@@ -346,6 +411,7 @@ public partial class SettingsWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         _sessions.Changed -= OnSessionsChanged;
+        _volume.StateChanged -= OnVolumeStateChanged;
         _updates.StateChanged -= OnUpdateStateChanged;
 
         // Closing mid-recording must not leave the global hotkeys released.
@@ -371,12 +437,26 @@ public partial class SettingsWindow : Window
 
     private bool ValidateUnique(AppSettings settings)
     {
-        if (settings.NextHotkey.SameAs(settings.PreviousHotkey) ||
-            settings.NextHotkey.SameAs(settings.PlayPauseHotkey) ||
-            settings.PreviousHotkey.SameAs(settings.PlayPauseHotkey))
+        var hotkeys = new[]
         {
-            ShowError("The same combination is assigned to more than one action.");
-            return false;
+            settings.NextHotkey,
+            settings.PreviousHotkey,
+            settings.PlayPauseHotkey,
+            settings.VolumeUpHotkey,
+            settings.VolumeDownHotkey,
+            settings.MuteHotkey
+        };
+
+        for (var i = 0; i < hotkeys.Length; i++)
+        {
+            for (var j = i + 1; j < hotkeys.Length; j++)
+            {
+                if (hotkeys[i].SameAs(hotkeys[j]))
+                {
+                    ShowError("The same combination is assigned to more than one action.");
+                    return false;
+                }
+            }
         }
 
         return true;
@@ -386,6 +466,10 @@ public partial class SettingsWindow : Window
     {
         MediaAction.Next => NextHotkeyBox,
         MediaAction.Previous => PreviousHotkeyBox,
+        MediaAction.PlayPause => PlayPauseHotkeyBox,
+        MediaAction.VolumeUp => VolumeUpHotkeyBox,
+        MediaAction.VolumeDown => VolumeDownHotkeyBox,
+        MediaAction.Mute => MuteHotkeyBox,
         _ => PlayPauseHotkeyBox
     };
 
@@ -405,7 +489,11 @@ public partial class SettingsWindow : Window
     {
         MediaAction.Next => "Next track",
         MediaAction.Previous => "Previous track",
-        _ => "Play / Pause"
+        MediaAction.PlayPause => "Play / Pause",
+        MediaAction.VolumeUp => "Volume up",
+        MediaAction.VolumeDown => "Volume down",
+        MediaAction.Mute => "Mute / Unmute",
+        _ => action.ToString()
     };
 
     private sealed class PlayerOption

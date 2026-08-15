@@ -41,6 +41,10 @@ public sealed class SettingsService
                     loaded.NextHotkey = Sanitize(loaded.NextHotkey, defaults.NextHotkey);
                     loaded.PreviousHotkey = Sanitize(loaded.PreviousHotkey, defaults.PreviousHotkey);
                     loaded.PlayPauseHotkey = Sanitize(loaded.PlayPauseHotkey, defaults.PlayPauseHotkey);
+                    loaded.VolumeUpHotkey = Sanitize(loaded.VolumeUpHotkey, defaults.VolumeUpHotkey);
+                    loaded.VolumeDownHotkey = Sanitize(loaded.VolumeDownHotkey, defaults.VolumeDownHotkey);
+                    loaded.MuteHotkey = Sanitize(loaded.MuteHotkey, defaults.MuteHotkey);
+                    loaded.VolumeStepPercent = Math.Clamp(loaded.VolumeStepPercent, 1, 25);
                     if (string.IsNullOrWhiteSpace(loaded.PreferredPlayer))
                     {
                         loaded.PreferredPlayer = null;

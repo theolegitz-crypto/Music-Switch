@@ -13,6 +13,15 @@ public sealed class AppSettings
 
     public HotkeySettings PlayPauseHotkey { get; set; } = HotkeySettings.Create(true, false, true, false, Key.Space);
 
+    public HotkeySettings VolumeUpHotkey { get; set; } = HotkeySettings.Create(true, false, true, false, Key.Up);
+
+    public HotkeySettings VolumeDownHotkey { get; set; } = HotkeySettings.Create(true, false, true, false, Key.Down);
+
+    public HotkeySettings MuteHotkey { get; set; } = HotkeySettings.Create(true, false, true, false, Key.M);
+
+    /// <summary>Amount changed by one Volume Up / Down hotkey press.</summary>
+    public int VolumeStepPercent { get; set; } = 5;
+
     /// <summary>GSMTC SourceAppUserModelId of the preferred player, or null for "Auto".</summary>
     public string? PreferredPlayer { get; set; }
 
@@ -31,6 +40,10 @@ public sealed class AppSettings
         NextHotkey = NextHotkey.Clone(),
         PreviousHotkey = PreviousHotkey.Clone(),
         PlayPauseHotkey = PlayPauseHotkey.Clone(),
+        VolumeUpHotkey = VolumeUpHotkey.Clone(),
+        VolumeDownHotkey = VolumeDownHotkey.Clone(),
+        MuteHotkey = MuteHotkey.Clone(),
+        VolumeStepPercent = VolumeStepPercent,
         PreferredPlayer = PreferredPlayer,
         StartWithWindows = StartWithWindows,
         ShowTrackPopup = ShowTrackPopup,

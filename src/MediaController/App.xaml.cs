@@ -40,6 +40,7 @@ public partial class App : Application
     private TrayIconService _trayService = null!;
     private MediaArtworkService _artworkService = null!;
     private TrackPopupService _popupService = null!;
+    private VolumeService _volumeService = null!;
     private UpdateService _updateService = null!;
 
     private SettingsWindow? _settingsWindow;
@@ -97,6 +98,7 @@ public partial class App : Application
         _sessionService.SetPreferredSession(settings.PreferredPlayer);
 
         _controlService = new MediaControlService(_sessionService, _fallbackService);
+        _volumeService = new VolumeService(_sessionService);
         _artworkService = new MediaArtworkService();
         _updateService = new UpdateService();
 
@@ -183,7 +185,27 @@ public partial class App : Application
         }
     }
 
-    private void OnHotkeyPressed(MediaAction action) => _ = _controlService.ExecuteAsync(action);
+    private void OnHotkeyPressed(MediaAction action)
+    {
+        switch (action)
+        {
+            case MediaAction.VolumeUp:
+                _volumeService.Adjust(_settingsService.Current.VolumeStepPercent);
+                break;
+
+            case MediaAction.VolumeDown:
+                _volumeService.Adjust(-_settingsService.Current.VolumeStepPercent);
+                break;
+
+            case MediaAction.Mute:
+                _volumeService.ToggleMute();
+                break;
+
+            default:
+                _ = _controlService.ExecuteAsync(action);
+                break;
+        }
+    }
 
     private void ShowSettings()
     {
@@ -196,7 +218,7 @@ public partial class App : Application
         if (_settingsWindow is null)
         {
             _settingsWindow = new SettingsWindow(
-                _settingsService, _sessionService, _controlService, _hotkeyService, _startupService, _updateService);
+                _settingsService, _sessionService, _controlService, _hotkeyService, _startupService, _volumeService, _updateService);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
 

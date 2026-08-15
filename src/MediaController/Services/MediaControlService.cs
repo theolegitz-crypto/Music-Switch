@@ -84,6 +84,12 @@ public sealed class MediaControlService : IDisposable
     /// </summary>
     public Task<MediaActionResult> ExecuteAsync(MediaAction action)
     {
+        if (!IsMediaAction(action))
+        {
+            Logger.Warn("MediaControlService ignored non-media action " + action + ".");
+            return Task.FromResult(new MediaActionResult(action, false, false, null, null));
+        }
+
         if (_disposed)
         {
             return Task.FromResult(new MediaActionResult(action, false, false, null, null));
@@ -327,7 +333,8 @@ public sealed class MediaControlService : IDisposable
         {
             MediaAction.Next => WinRt.TryBoolAsync(() => session.TrySkipNextAsync(), "TrySkipNextAsync"),
             MediaAction.Previous => WinRt.TryBoolAsync(() => session.TrySkipPreviousAsync(), "TrySkipPreviousAsync"),
-            _ => WinRt.TryBoolAsync(() => session.TryTogglePlayPauseAsync(), "TryTogglePlayPauseAsync")
+            MediaAction.PlayPause => WinRt.TryBoolAsync(() => session.TryTogglePlayPauseAsync(), "TryTogglePlayPauseAsync"),
+            _ => Task.FromResult(false)
         };
     }
 
@@ -377,6 +384,9 @@ public sealed class MediaControlService : IDisposable
                 new MediaActionResult(command.Action, false, false, null, _activeTargetSessionId));
         }
     }
+
+    private static bool IsMediaAction(MediaAction action) =>
+        action is MediaAction.Next or MediaAction.Previous or MediaAction.PlayPause;
 
     private static bool IsSkip(MediaAction action) =>
         action is MediaAction.Next or MediaAction.Previous;
