@@ -166,6 +166,7 @@ public partial class App : Application
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
             _popupService?.Dispose();
+            _controlService?.Dispose();
             _updateService?.Dispose();
             _sessionService?.Dispose();
             Logger.Info("Media Controller stopped.");

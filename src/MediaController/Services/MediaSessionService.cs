@@ -183,6 +183,24 @@ public sealed class MediaSessionService : IDisposable
             string.Equals(IdOf(session), sourceAppUserModelId, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// True only when Windows itself currently ranks this exact GSMTC application as current.
+    /// Used to decide whether a generic system media-key fallback can be sent without risking
+    /// an unrelated paused Telegram/browser session receiving the command.
+    /// </summary>
+    public bool IsWindowsCurrentSession(string? sourceAppUserModelId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceAppUserModelId))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            GetSessionId(GetCurrentSession()),
+            sourceAppUserModelId,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Last non-empty metadata published by a specific player, if we have seen any.</summary>
     public TrackInfo? GetLastUsefulTrack(string? sourceAppUserModelId)
     {

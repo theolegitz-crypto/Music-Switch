@@ -30,7 +30,7 @@ Upload this project to a GitHub repository. The included `.github/workflows/rele
 1. open **Actions**;
 2. select **Build installer and publish release**;
 3. click **Run workflow**;
-4. enter a version such as `0.4.2`.
+4. enter a version such as `0.4.3`.
 
 GitHub Actions publishes a self-contained app, writes the current repository URL into `update-source.txt`, creates Velopack full/delta packages and Setup.exe, and uploads the release assets to GitHub Releases.
 
