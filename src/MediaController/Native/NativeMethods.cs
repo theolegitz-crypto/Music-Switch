@@ -26,15 +26,21 @@ internal static class NativeMethods
     /// <summary>WS_EX_NOACTIVATE - the popup can never become the foreground window.</summary>
     public const int WS_EX_NOACTIVATE = 0x08000000;
 
+    /// <summary>WS_EX_TRANSPARENT - lets mouse input fall through the passive popup.</summary>
+    public const int WS_EX_TRANSPARENT = 0x00000020;
+
     public const int GWL_EXSTYLE = -20;
 
     public const uint MONITOR_DEFAULTTOPRIMARY = 1;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
     public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_SHOWWINDOW = 0x0040;
+    public const uint SWP_NOOWNERZORDER = 0x0200;
 
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
 
     // Shell icon/shortcut cache refresh after an in-place update.
@@ -42,6 +48,7 @@ internal static class NativeMethods
     public const uint SHCNF_IDLIST = 0x0000;
 
     public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

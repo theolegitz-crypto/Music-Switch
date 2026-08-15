@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -17,14 +18,17 @@ public partial class TrackPopupWindow : Window
     private static readonly TimeSpan RiseDuration = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan ContentSwapDuration = TimeSpan.FromMilliseconds(130);
+    private static readonly TimeSpan TopmostPulseInterval = TimeSpan.FromMilliseconds(180);
 
     private static readonly CubicEase EaseOut = CreateEase(EasingMode.EaseOut);
     private static readonly CubicEase EaseIn = CreateEase(EasingMode.EaseIn);
 
     private readonly DispatcherTimer _hideTimer;
+    private readonly DispatcherTimer _topmostPulseTimer;
 
     private IntPtr _handle;
     private bool _fadingOut;
+    private bool _gameOverlayMode;
     private string _shownKey = string.Empty;
 
     public TrackPopupWindow()
@@ -33,6 +37,15 @@ public partial class TrackPopupWindow : Window
 
         _hideTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
         _hideTimer.Tick += OnHideTick;
+
+        // Some fullscreen/borderless games periodically refresh their own z-order. While the
+        // popup is visible, briefly reassert HWND_TOPMOST without ever activating the window.
+        // This is intentionally short-lived and stops as soon as the popup hides.
+        _topmostPulseTimer = new DispatcherTimer(DispatcherPriority.Send, Dispatcher)
+        {
+            Interval = TopmostPulseInterval
+        };
+        _topmostPulseTimer.Tick += OnTopmostPulse;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -41,15 +54,16 @@ public partial class TrackPopupWindow : Window
 
         _handle = new WindowInteropHelper(this).Handle;
 
-        // WS_EX_NOACTIVATE is what actually keeps the game in the foreground: even a click
-        // cannot make this window active. WS_EX_TOOLWINDOW keeps it out of Alt+Tab.
+        // NOACTIVATE keeps the game focused. TOOLWINDOW keeps the popup out of Alt+Tab.
+        // TRANSPARENT makes the passive overlay click-through at HWND level as well as WPF level.
         var style = NativeMethods.GetWindowLongPtr(_handle, NativeMethods.GWL_EXSTYLE).ToInt64();
-        style |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
+        style |= NativeMethods.WS_EX_NOACTIVATE |
+                 NativeMethods.WS_EX_TOOLWINDOW |
+                 NativeMethods.WS_EX_TRANSPARENT;
         NativeMethods.SetWindowLongPtr(_handle, NativeMethods.GWL_EXSTYLE, new IntPtr(style));
 
         // Do not ask DWM to draw a second rounded top-level frame here. The popup already
-        // has per-pixel rounded corners via WPF; mixing both can produce a pale rectangular
-        // outline around the transparent window on some Windows 11 configurations.
+        // has per-pixel rounded corners via WPF; mixing both can produce a pale outline.
     }
 
     /// <summary>Updates the content and (re)starts the show plus auto-hide cycle. UI thread only.</summary>
@@ -65,14 +79,22 @@ public partial class TrackPopupWindow : Window
             Show();
         }
 
-        // Layout must settle before the height is known, otherwise the window is positioned
-        // from a stale size and hangs off the edge of the work area.
+        // Reinforce the non-activating Win32 show state. WPF ShowActivated=False normally does
+        // this already; the explicit call is useful when a fullscreen game owns the foreground.
+        if (_handle != IntPtr.Zero)
+        {
+            NativeMethods.ShowWindow(_handle, NativeMethods.SW_SHOWNOACTIVATE);
+        }
+
         UpdateLayout();
-        Position(onActiveMonitor);
+        Position(onActiveMonitor, forceZOrderCycle: true);
+
+        // Keep the popup above games that refresh their z-order during presentation.
+        _topmostPulseTimer.Stop();
+        _topmostPulseTimer.Start();
 
         if (wasVisible)
         {
-            // Already on screen: swap the content in place instead of replaying the entrance.
             PlayContentSwap();
         }
         else
@@ -97,7 +119,7 @@ public partial class TrackPopupWindow : Window
 
         Render(track, artwork);
         UpdateLayout();
-        Position(onActiveMonitor);
+        Position(onActiveMonitor, forceZOrderCycle: false);
 
         if (changed)
         {
@@ -108,6 +130,7 @@ public partial class TrackPopupWindow : Window
     public void HideNow()
     {
         _hideTimer.Stop();
+        _topmostPulseTimer.Stop();
         _fadingOut = false;
         BeginAnimation(OpacityProperty, null);
         Opacity = 0;
@@ -116,8 +139,6 @@ public partial class TrackPopupWindow : Window
 
     private void Render(TrackInfo? track, ImageSource? artwork)
     {
-        // Title falls back to the artist, then to a generic label, so the popup is never
-        // blank for a player that publishes only half its metadata.
         var title = track?.Title ?? string.Empty;
         var artist = track?.Artist ?? string.Empty;
 
@@ -177,6 +198,7 @@ public partial class TrackPopupWindow : Window
     private void OnHideTick(object? sender, EventArgs e)
     {
         _hideTimer.Stop();
+        _topmostPulseTimer.Stop();
         _fadingOut = true;
 
         RootOffset.BeginAnimation(TranslateTransform.YProperty, Animate(0, 4, FadeOutDuration, EaseIn));
@@ -184,7 +206,6 @@ public partial class TrackPopupWindow : Window
         var fade = Animate(Opacity, 0.0, FadeOutDuration, EaseIn);
         fade.Completed += (_, _) =>
         {
-            // A new action may have restarted the popup while this fade was running.
             if (!_fadingOut)
             {
                 return;
@@ -201,6 +222,38 @@ public partial class TrackPopupWindow : Window
         BeginAnimation(OpacityProperty, fade);
     }
 
+    private void OnTopmostPulse(object? sender, EventArgs e)
+    {
+        if (!IsVisible || _fadingOut || _handle == IntPtr.Zero)
+        {
+            _topmostPulseTimer.Stop();
+            return;
+        }
+
+        try
+        {
+            // Do not move the popup here; just keep its z-order asserted. Cycling through
+            // NOTOPMOST is reserved for the initial fullscreen show to avoid visible churn.
+            NativeMethods.SetWindowPos(
+                _handle,
+                NativeMethods.HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SWP_NOMOVE |
+                NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE |
+                NativeMethods.SWP_NOOWNERZORDER |
+                NativeMethods.SWP_SHOWWINDOW);
+        }
+        catch (Exception ex)
+        {
+            _topmostPulseTimer.Stop();
+            Logger.Warn("Could not reassert track popup topmost state: " + ex.Message);
+        }
+    }
+
     private static DoubleAnimation Animate(double from, double to, TimeSpan duration, IEasingFunction ease) =>
         new(from, to, new Duration(duration)) { EasingFunction = ease };
 
@@ -212,11 +265,10 @@ public partial class TrackPopupWindow : Window
     }
 
     /// <summary>
-    /// Places the popup bottom-right of the work area, in device pixels via SetWindowPos.
-    /// Going through Win32 avoids all DIP conversion, so the popup lands correctly on a
-    /// 150% scaled second monitor without any DPI arithmetic of our own.
+    /// Places the popup bottom-right of the foreground monitor. If the foreground window fills
+    /// that monitor, use the complete monitor rectangle and a stronger one-time z-order cycle.
     /// </summary>
-    private void Position(bool onActiveMonitor)
+    private void Position(bool onActiveMonitor, bool forceZOrderCycle)
     {
         if (_handle == IntPtr.Zero)
         {
@@ -225,15 +277,12 @@ public partial class TrackPopupWindow : Window
 
         try
         {
+            var foreground = onActiveMonitor ? NativeMethods.GetForegroundWindow() : IntPtr.Zero;
             var monitor = IntPtr.Zero;
 
-            if (onActiveMonitor)
+            if (foreground != IntPtr.Zero)
             {
-                var foreground = NativeMethods.GetForegroundWindow();
-                if (foreground != IntPtr.Zero)
-                {
-                    monitor = NativeMethods.MonitorFromWindow(foreground, NativeMethods.MONITOR_DEFAULTTONEAREST);
-                }
+                monitor = NativeMethods.MonitorFromWindow(foreground, NativeMethods.MONITOR_DEFAULTTONEAREST);
             }
 
             if (monitor == IntPtr.Zero)
@@ -243,7 +292,7 @@ public partial class TrackPopupWindow : Window
 
             var info = new NativeMethods.MONITORINFO
             {
-                cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>()
+                cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>()
             };
 
             if (!NativeMethods.GetMonitorInfo(monitor, ref info) ||
@@ -252,15 +301,35 @@ public partial class TrackPopupWindow : Window
                 return;
             }
 
+            _gameOverlayMode = IsMonitorFillingForeground(foreground, info.rcMonitor);
+            var target = _gameOverlayMode ? info.rcMonitor : info.rcWork;
+
             var dpi = NativeMethods.GetDpiForWindow(_handle);
-            var margin = (int)Math.Round(16.0 * (dpi == 0 ? 96 : dpi) / 96.0);
+            var scaleDpi = dpi == 0 ? 96 : dpi;
+            var margin = (int)Math.Round(16.0 * scaleDpi / 96.0);
 
-            // The card is inset inside the window by its own margin, so trim that back off
-            // to keep the visible gap at 16 DIP rather than 16 plus the shadow padding.
-            var inset = (int)Math.Round(12.0 * (dpi == 0 ? 96 : dpi) / 96.0);
+            // The visible glass card is inset inside the transparent WPF window for its shadow.
+            var inset = (int)Math.Round(12.0 * scaleDpi / 96.0);
 
-            var x = info.rcWork.Right - bounds.Width - margin + inset;
-            var y = info.rcWork.Bottom - bounds.Height - margin + inset;
+            var x = target.Right - bounds.Width - margin + inset;
+            var y = target.Bottom - bounds.Height - margin + inset;
+
+            if (_gameOverlayMode && forceZOrderCycle)
+            {
+                // A NOTOPMOST -> TOPMOST cycle makes Windows rebuild the z-order relationship
+                // after a fullscreen swap-chain window has taken over the monitor. NOACTIVATE
+                // ensures Dota/the game remains the foreground application throughout.
+                NativeMethods.SetWindowPos(
+                    _handle,
+                    NativeMethods.HWND_NOTOPMOST,
+                    x,
+                    y,
+                    0,
+                    0,
+                    NativeMethods.SWP_NOSIZE |
+                    NativeMethods.SWP_NOACTIVATE |
+                    NativeMethods.SWP_NOOWNERZORDER);
+            }
 
             NativeMethods.SetWindowPos(
                 _handle,
@@ -269,11 +338,31 @@ public partial class TrackPopupWindow : Window
                 y,
                 0,
                 0,
-                NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+                NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE |
+                NativeMethods.SWP_NOOWNERZORDER |
+                NativeMethods.SWP_SHOWWINDOW);
         }
         catch (Exception ex)
         {
             Logger.Warn("Could not position the track popup: " + ex.Message);
         }
+    }
+
+    private static bool IsMonitorFillingForeground(IntPtr foreground, NativeMethods.RECT monitor)
+    {
+        if (foreground == IntPtr.Zero || !NativeMethods.GetWindowRect(foreground, out var window))
+        {
+            return false;
+        }
+
+        // Borderless/fullscreen windows can differ from the monitor by a pixel or two because
+        // of scaling/rounding. A small tolerance catches those without classifying maximized
+        // desktop windows that stop at the taskbar as fullscreen.
+        const int tolerance = 3;
+        return Math.Abs(window.Left - monitor.Left) <= tolerance &&
+               Math.Abs(window.Top - monitor.Top) <= tolerance &&
+               Math.Abs(window.Right - monitor.Right) <= tolerance &&
+               Math.Abs(window.Bottom - monitor.Bottom) <= tolerance;
     }
 }

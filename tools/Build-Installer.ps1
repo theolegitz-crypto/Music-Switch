@@ -22,7 +22,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 }
 
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$') {
-    throw "Version must be SemVer, for example 0.4.5"
+    throw "Version must be SemVer, for example 0.4.6"
 }
 
 Write-Host ""
