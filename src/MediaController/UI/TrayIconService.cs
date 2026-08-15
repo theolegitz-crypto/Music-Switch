@@ -43,7 +43,14 @@ public sealed class TrayIconService : IDisposable
             ContextMenuStrip = _menu
         };
 
-        _icon.DoubleClick += (_, _) => SettingsRequested?.Invoke();
+        // One normal left click behaves like opening the app. Right click still opens the menu.
+        _icon.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                SettingsRequested?.Invoke();
+            }
+        };
 
         _sessions.Changed += OnSessionsChanged;
         UpdateTooltip();
@@ -222,6 +229,28 @@ public sealed class TrayIconService : IDisposable
 
     private static Icon LoadIcon()
     {
+        // Read the exact WPF resource instead of asking Windows to extract the icon from the
+        // exe. This bypasses Explorer's associated-icon cache, which can remain stale after
+        // an in-place Velopack update. Clone lets us close the resource stream immediately.
+        try
+        {
+            var resource = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/MediaController.ico", UriKind.Absolute));
+
+            if (resource?.Stream is not null)
+            {
+                using (resource.Stream)
+                using (var source = new Icon(resource.Stream))
+                {
+                    return (Icon)source.Clone();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn("Could not load the embedded tray icon: " + ex.Message);
+        }
+
         try
         {
             var path = Environment.ProcessPath;
@@ -236,9 +265,10 @@ public sealed class TrayIconService : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warn("Could not load the application icon: " + ex.Message);
+            Logger.Warn("Could not load the executable icon: " + ex.Message);
         }
 
         return SystemIcons.Application;
     }
+
 }

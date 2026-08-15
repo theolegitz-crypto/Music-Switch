@@ -1,5 +1,6 @@
 using System.Windows;
 using MediaController.Core;
+using MediaController.Native;
 using MediaController.Services;
 using MediaController.UI;
 using Velopack;
@@ -136,10 +137,14 @@ public partial class App : Application
             _startupService.Disable();
         }
 
+        // Older installed shortcuts can survive an in-place Velopack update with stale
+        // arguments/icon metadata. Repair them once on every installed startup.
+        ShortcutRepairService.TryRepairInstalledShortcuts();
+
         _ = _sessionService.InitializeAsync();
 
         // Only start listening after all services required by ShowSettings exist. The named
-        // AutoResetEvent keeps an early second-launch signal pending until this listener starts.
+        // Named-pipe retries keep an early second-launch request alive until this listener starts.
         _singleInstance!.StartOpenSettingsListener(() =>
             Dispatcher.BeginInvoke(new Action(ShowSettings)));
 
@@ -181,26 +186,55 @@ public partial class App : Application
 
     private void ShowSettings()
     {
-        if (_settingsWindow is not null)
+        if (!Dispatcher.CheckAccess())
         {
-            if (_settingsWindow.WindowState == WindowState.Minimized)
-            {
-                _settingsWindow.WindowState = WindowState.Normal;
-            }
-
-            if (!_settingsWindow.IsVisible)
-            {
-                _settingsWindow.Show();
-            }
-
-            _settingsWindow.Activate();
+            Dispatcher.BeginInvoke(new Action(ShowSettings));
             return;
         }
 
-        _settingsWindow = new SettingsWindow(
-            _settingsService, _sessionService, _controlService, _hotkeyService, _startupService, _updateService);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Show();
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new SettingsWindow(
+                _settingsService, _sessionService, _controlService, _hotkeyService, _startupService, _updateService);
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        }
+
+        BringSettingsToFront(_settingsWindow);
+    }
+
+    private static void BringSettingsToFront(SettingsWindow window)
+    {
+        try
+        {
+            if (!window.IsVisible)
+            {
+                window.Show();
+            }
+
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
+                NativeMethods.SetForegroundWindow(handle);
+            }
+
+            // Activate is the normal WPF path. The short Topmost pulse is a fallback for
+            // Windows foreground restrictions and is immediately reverted. It is only used
+            // after an explicit user request to open Settings, never for the track popup.
+            window.Activate();
+            window.Topmost = true;
+            window.Topmost = false;
+            window.Focus();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn("Could not bring Settings to the foreground: " + ex.Message);
+        }
     }
 
     private async Task CheckForUpdatesAfterStartupAsync()

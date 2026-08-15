@@ -1,8 +1,8 @@
-# Media Controller 0.4.1
+# Media Controller 0.4.2
 
-- Added the new Purple Liquid Glass application icon.
-- The installed executable, Settings window, tray icon, shortcuts and Velopack installer now use the same icon.
-- Launching Media Controller manually now opens Settings immediately.
-- Start with Windows launches quietly in the tray using `--background`.
-- Launching the shortcut again while Media Controller is already running opens the existing Settings window instead of silently exiting.
-- Existing v0.4.0 autostart entries are automatically migrated to background mode.
+- Fixed manual launch when Media Controller is already running: opening the shortcut now reliably opens/restores Settings.
+- Replaced the single-instance activation event with a reliable acknowledged named-pipe command.
+- Repairs old Desktop and Start Menu shortcuts after updating from 0.4.0/0.4.1, clearing stale `--background` arguments.
+- Forces the new purple application icon onto existing shortcuts and asks Explorer to refresh its icon cache.
+- Tray icon now loads directly from the embedded application resource instead of the Windows associated-icon cache.
+- A single left-click on the tray icon now opens Settings; right-click still opens the tray menu.

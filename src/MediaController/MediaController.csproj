@@ -17,8 +17,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\MediaController.ico</ApplicationIcon>
 
-    <!-- v0.4.1: app icon + manual-launch Settings + single-instance activation -->
-    <Version>0.4.1</Version>
+    <!-- v0.4.2: robust shortcut/icon repair + reliable single-instance Settings activation -->
+    <Version>0.4.2</Version>
 
     <!-- Velopack must run before WPF's generated entry point, so App.xaml is a normal Page
          and App.xaml.cs owns Main(). -->
@@ -37,8 +37,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- WPF also needs the icon as a resource so Settings can use the same artwork. -->
+    <!-- WPF uses the embedded icon for Settings/tray. A second physical copy is shipped
+         specifically for .lnk files so Windows sees a new icon source after updating from
+         the icon-less 0.4.0 shortcut and does not keep the old executable icon cache. -->
     <Resource Include="Assets\MediaController.ico" />
+    <Content Include="Assets\MediaControllerShortcut.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

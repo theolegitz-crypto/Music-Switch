@@ -30,7 +30,7 @@ Upload this project to a GitHub repository. The included `.github/workflows/rele
 1. open **Actions**;
 2. select **Build installer and publish release**;
 3. click **Run workflow**;
-4. enter a version such as `0.4.1`.
+4. enter a version such as `0.4.2`.
 
 GitHub Actions publishes a self-contained app, writes the current repository URL into `update-source.txt`, creates Velopack full/delta packages and Setup.exe, and uploads the release assets to GitHub Releases.
 
@@ -48,10 +48,3 @@ Regular IDE / `dotnet run` builds intentionally have updates disabled because th
 - Win32 `RegisterHotKey`
 - `SendInput` media-key fallback
 - Velopack 1.2.0 for installer and updates
-
-## v0.4.1 launch behaviour
-
-- Normal launch from the Start menu / desktop shortcut opens Settings.
-- `--background` starts quietly in the notification area and is used by **Start with Windows**.
-- Starting Media Controller again while it is already running signals the existing process to open/restore Settings.
-- `Assets/MediaController.ico` is a multi-resolution Windows icon used by the executable, Settings window, tray icon and Velopack installer.
