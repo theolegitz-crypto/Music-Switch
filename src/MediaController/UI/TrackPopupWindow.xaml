@@ -17,11 +17,6 @@
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Ideal">
 
-    <!--
-        Layered window (AllowsTransparency) rather than a DWM acrylic backdrop: this gives
-        real rounded corners, per-pixel alpha and a soft shadow on Windows 10 as well as 11,
-        which matters more for a 400px card floating over a game than a real blur would.
-    -->
     <Border x:Name="Root"
             Margin="14,10,14,14"
             CornerRadius="18"
@@ -42,19 +37,16 @@
         </Border.Effect>
 
         <Grid>
-            <!-- Glass sheen: a lit top edge and a faint purple floor. -->
             <Border CornerRadius="18" Background="{StaticResource GlassSheenBrush}"/>
 
-            <Grid Margin="14">
+            <!-- Track popup. -->
+            <Grid x:Name="TrackContent" Margin="14">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- ============ artwork ============ -->
                 <Grid Grid.Column="0" Width="76" Height="76" VerticalAlignment="Center">
-
-                    <!-- Purple glow: a radial gradient, not a BlurEffect, so it costs nothing. -->
                     <Ellipse Width="104" Height="104"
                              Fill="{StaticResource ArtworkGlowBrush}"
                              IsHitTestVisible="False"/>
@@ -64,7 +56,6 @@
                             <ScaleTransform x:Name="ArtworkScale" ScaleX="1" ScaleY="1"/>
                         </Grid.RenderTransform>
 
-                        <!-- Placeholder sits underneath and shows through when there is no cover. -->
                         <Border CornerRadius="14"
                                 Background="{StaticResource ArtworkPlaceholderBrush}"
                                 BorderBrush="#22FFFFFF"
@@ -76,7 +67,6 @@
                                        VerticalAlignment="Center"/>
                         </Border>
 
-                        <!-- ImageBrush on a rounded Border: real corner clipping, no geometry maths. -->
                         <Border x:Name="ArtworkBorder"
                                 CornerRadius="14"
                                 BorderBrush="#22FFFFFF"
@@ -89,9 +79,16 @@
                     </Grid>
                 </Grid>
 
-                <!-- ============ text ============ -->
-                <StackPanel x:Name="TextHost" Grid.Column="1" Margin="16,0,2,0" VerticalAlignment="Center">
+                <Grid x:Name="TextHost" Grid.Column="1" Margin="16,0,2,0" VerticalAlignment="Center">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
                     <TextBlock x:Name="TitleText"
+                               Grid.Row="0"
                                Text="Unknown track"
                                FontFamily="{StaticResource UiFontFamily}"
                                FontSize="16"
@@ -101,6 +98,7 @@
                                TextWrapping="NoWrap"/>
 
                     <TextBlock x:Name="ArtistText"
+                               Grid.Row="1"
                                Text=""
                                Margin="0,3,0,0"
                                FontFamily="{StaticResource UiFontFamily}"
@@ -110,14 +108,119 @@
                                TextWrapping="NoWrap"/>
 
                     <TextBlock x:Name="SourceText"
+                               Grid.Row="2"
                                Text=""
-                               Margin="0,10,0,0"
+                               Margin="0,8,0,0"
                                FontFamily="{StaticResource UiFontFamily}"
                                FontSize="11.5"
                                Foreground="{StaticResource MutedTextBrush}"
                                TextTrimming="CharacterEllipsis"
                                TextWrapping="NoWrap"/>
+
+                    <!-- Live GSMTC timeline. Hidden when the player does not expose duration. -->
+                    <Grid x:Name="TrackTimelineHost" Grid.Row="3" Margin="0,8,0,0" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="4"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid x:Name="TrackProgressRail" Grid.Row="0" Height="4" ClipToBounds="True">
+                            <Border Background="#2BFFFFFF" CornerRadius="2"/>
+                            <Border x:Name="TrackProgressFill"
+                                    Width="0"
+                                    HorizontalAlignment="Left"
+                                    Background="#A970FF"
+                                    CornerRadius="2"/>
+                        </Grid>
+
+                        <TextBlock x:Name="TrackTimeText"
+                                   Grid.Row="1"
+                                   Margin="0,4,0,0"
+                                   HorizontalAlignment="Right"
+                                   FontFamily="{StaticResource UiFontFamily}"
+                                   FontSize="10.5"
+                                   Foreground="#82758F"
+                                   Text="0:00 / 0:00"/>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- Vertical music-volume OSD. -->
+            <Grid x:Name="VolumeContent" Margin="18,14" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="52"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="28"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Width="46" Height="46"
+                        CornerRadius="14"
+                        VerticalAlignment="Center"
+                        Background="#2A9C5CFF"
+                        BorderBrush="#30FFFFFF"
+                        BorderThickness="1">
+                    <Grid>
+                        <Ellipse Width="64" Height="64"
+                                 Fill="{StaticResource ArtworkGlowBrush}"
+                                 Opacity="0.7"/>
+                        <TextBlock x:Name="VolumeGlyphText"
+                                   Text="&#x1F50A;"
+                                   FontFamily="Segoe UI Emoji"
+                                   FontSize="21"
+                                   Foreground="{StaticResource PrimaryTextBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <StackPanel x:Name="VolumeHost"
+                            Grid.Column="1"
+                            Margin="14,0,12,0"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="VolumeTitleText"
+                               Text="Music volume"
+                               FontFamily="{StaticResource UiFontFamily}"
+                               FontSize="14.5"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource PrimaryTextBrush}"/>
+                    <TextBlock x:Name="VolumePlayerText"
+                               Text=""
+                               Margin="0,3,0,0"
+                               FontFamily="{StaticResource UiFontFamily}"
+                               FontSize="11.5"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"/>
+                    <TextBlock x:Name="VolumePercentText"
+                               Text="65%"
+                               Margin="0,7,0,0"
+                               FontFamily="{StaticResource UiFontFamily}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#D7C0FF"/>
                 </StackPanel>
+
+                <!-- Vertical level: fills bottom -> top. -->
+                <Grid Grid.Column="2"
+                      Width="9"
+                      Height="76"
+                      VerticalAlignment="Center"
+                      HorizontalAlignment="Center"
+                      ClipToBounds="True">
+                    <Border Background="#30FFFFFF" CornerRadius="4.5"/>
+                    <Border x:Name="VolumeFill"
+                            Height="0"
+                            VerticalAlignment="Bottom"
+                            Background="#A970FF"
+                            CornerRadius="4.5">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8"
+                                              ShadowDepth="0"
+                                              Color="#9C5CFF"
+                                              Opacity="0.65"/>
+                        </Border.Effect>
+                    </Border>
+                </Grid>
             </Grid>
         </Grid>
     </Border>

@@ -24,6 +24,7 @@ public sealed class TrackPopupService : IDisposable
     private readonly MediaControlService _control;
     private readonly MediaArtworkService _artwork;
     private readonly SettingsService _settings;
+    private readonly VolumeService _volume;
     private readonly GameBarBridgeService _gameBar;
     private readonly Dispatcher _dispatcher;
 
@@ -36,6 +37,7 @@ public sealed class TrackPopupService : IDisposable
         MediaControlService control,
         MediaArtworkService artwork,
         SettingsService settings,
+        VolumeService volume,
         GameBarBridgeService gameBar,
         Dispatcher dispatcher)
     {
@@ -43,10 +45,12 @@ public sealed class TrackPopupService : IDisposable
         _control = control;
         _artwork = artwork;
         _settings = settings;
+        _volume = volume;
         _gameBar = gameBar;
         _dispatcher = dispatcher;
 
         _control.ActionCompleted += OnActionCompleted;
+        _volume.StateChanged += OnVolumeStateChanged;
     }
 
     public void Dispose()
@@ -58,6 +62,7 @@ public sealed class TrackPopupService : IDisposable
 
         _disposed = true;
         _control.ActionCompleted -= OnActionCompleted;
+        _volume.StateChanged -= OnVolumeStateChanged;
 
         try
         {
@@ -72,6 +77,36 @@ public sealed class TrackPopupService : IDisposable
         {
             Logger.Warn("Could not close the track popup: " + ex.Message);
         }
+    }
+
+    private void OnVolumeStateChanged(VolumeState state)
+    {
+        if (_disposed || !_settings.Current.ShowTrackPopup || !state.IsAvailable)
+        {
+            return;
+        }
+
+        // Volume feedback becomes the newest visual state. This deliberately invalidates any
+        // delayed artwork/metadata work from a previous track skip so it cannot overwrite the
+        // volume bar a moment later. It never affects the media command queue itself.
+        Interlocked.Increment(ref _generation);
+
+        Post(() =>
+        {
+            try
+            {
+                var settings = _settings.Current;
+                var window = _window ??= new TrackPopupWindow();
+                window.ShowVolume(
+                    state,
+                    TimeSpan.FromMilliseconds(1350),
+                    settings.ShowPopupOnActiveMonitor);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Could not show music volume popup: " + ex.Message);
+            }
+        });
     }
 
     private void OnActionCompleted(MediaActionResult result)

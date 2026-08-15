@@ -54,7 +54,7 @@ The included `.github/workflows/release.yml` publishes the main desktop applicat
 1. open **Actions**;
 2. select **Build installer and publish release**;
 3. click **Run workflow**;
-4. enter a version such as `0.5.0`.
+4. enter a version such as `0.5.1`.
 
 GitHub Actions publishes the self-contained desktop app, writes the current repository URL into `update-source.txt`, creates Velopack full/delta packages and Setup.exe, and uploads the release assets to GitHub Releases.
 
@@ -74,3 +74,13 @@ Regular IDE / `dotnet run` builds intentionally have updates disabled because th
 - Xbox Game Bar UWP widget for optional fullscreen overlay
 - local named-pipe IPC between the WPF process and Game Bar widget
 - Velopack 1.2.0 for desktop installer and updates
+
+
+## v0.5.1 volume OSD
+
+Volume Up/Down/Mute display a compact liquid-glass music-volume bar without changing Windows master volume.
+
+
+## Live track timeline
+
+The track popup can show GSMTC playback position and duration as a live purple progress bar. The music-volume OSD uses a vertical level indicator and controls only the targeted player audio session.

@@ -9,7 +9,7 @@
   <Identity
     Name="theolegitz.MediaController.GameBar"
     Publisher="CN=Music Switch GameBar Dev"
-    Version="0.5.0.0" />
+    Version="0.5.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="9497d0c4-3b62-47af-bab1-9c6c516a5000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

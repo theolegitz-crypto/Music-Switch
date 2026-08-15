@@ -107,7 +107,7 @@ public partial class App : Application
 
         // Subscribes to MediaControlService.ActionCompleted, so hotkeys and the Settings
         // test buttons both raise the popup without either of them knowing about it.
-        _popupService = new TrackPopupService(_sessionService, _controlService, _artworkService, _settingsService, _gameBarBridgeService, Dispatcher);
+        _popupService = new TrackPopupService(_sessionService, _controlService, _artworkService, _settingsService, _volumeService, _gameBarBridgeService, Dispatcher);
 
         _trayService = new TrayIconService(_sessionService, _settingsService, _startupService);
         _trayService.SettingsRequested += ShowSettings;

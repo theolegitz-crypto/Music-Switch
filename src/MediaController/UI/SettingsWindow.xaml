@@ -243,7 +243,7 @@
                 <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SectionHeaderStyle}"/>
                 <Border Style="{StaticResource GlassCardStyle}" Margin="0,0,0,18">
                     <StackPanel>
-                        <CheckBox x:Name="ShowPopupBox" Content="Track popup" Style="{StaticResource ToggleSwitchStyle}"/>
+                        <CheckBox x:Name="ShowPopupBox" Content="Track &amp; volume popup" Style="{StaticResource ToggleSwitchStyle}"/>
 
                         <Border Style="{StaticResource GlassSeparatorStyle}"/>
 

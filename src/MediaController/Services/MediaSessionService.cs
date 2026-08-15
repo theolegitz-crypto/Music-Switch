@@ -373,6 +373,7 @@ public sealed class MediaSessionService : IDisposable
             "TryGetMediaPropertiesAsync");
 
         var sessionId = IdOf(session);
+        var (position, duration) = TimelineOf(session);
         var track = new TrackInfo(
             FormatDisplayName(sessionId),
             properties?.Title?.Trim() ?? string.Empty,
@@ -380,7 +381,9 @@ public sealed class MediaSessionService : IDisposable
             properties?.AlbumTitle?.Trim() ?? string.Empty,
             StatusOf(session),
             IsPlaying(session),
-            properties?.Thumbnail);
+            properties?.Thumbnail,
+            position,
+            duration);
 
         if (track.HasTrack && !string.IsNullOrWhiteSpace(sessionId))
         {
@@ -414,6 +417,45 @@ public sealed class MediaSessionService : IDisposable
         NowPlaying = text;
         Changed?.Invoke();
         TrackChanged?.Invoke(track);
+    }
+
+    private static (TimeSpan Position, TimeSpan Duration) TimelineOf(GlobalSystemMediaTransportControlsSession session)
+    {
+        try
+        {
+            var timeline = session.GetTimelineProperties();
+            if (timeline is null)
+            {
+                return (TimeSpan.Zero, TimeSpan.Zero);
+            }
+
+            var start = timeline.StartTime;
+            var end = timeline.EndTime;
+            var duration = end > start ? end - start : TimeSpan.Zero;
+
+            var position = timeline.Position - start;
+            if (position < TimeSpan.Zero)
+            {
+                position = timeline.Position;
+            }
+
+            if (duration > TimeSpan.Zero && position > duration)
+            {
+                position = duration;
+            }
+
+            if (position < TimeSpan.Zero)
+            {
+                position = TimeSpan.Zero;
+            }
+
+            return (position, duration);
+        }
+        catch
+        {
+            // Timeline is optional. Some players expose metadata/control without duration.
+            return (TimeSpan.Zero, TimeSpan.Zero);
+        }
     }
 
     private static string StatusOf(GlobalSystemMediaTransportControlsSession session)

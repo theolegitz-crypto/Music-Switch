@@ -10,11 +10,17 @@ using MediaController.Native;
 namespace MediaController.UI;
 
 /// <summary>
-/// The single popup instance. It is created once and hidden between uses - never closed,
-/// never re-created, so a burst of Next presses can only ever update one window.
+/// One passive liquid-glass OSD window shared by track and music-volume notifications.
+/// It never activates, never accepts input, and is reused rather than stacked.
 /// </summary>
 public partial class TrackPopupWindow : Window
 {
+    private enum PopupMode
+    {
+        Track,
+        Volume
+    }
+
     private static readonly TimeSpan RiseDuration = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan ContentSwapDuration = TimeSpan.FromMilliseconds(130);
@@ -25,11 +31,18 @@ public partial class TrackPopupWindow : Window
 
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _topmostPulseTimer;
+    private readonly DispatcherTimer _trackTimelineTimer;
 
     private IntPtr _handle;
     private bool _fadingOut;
     private bool _gameOverlayMode;
     private string _shownKey = string.Empty;
+    private PopupMode _mode = PopupMode.Track;
+
+    private TimeSpan _trackPosition;
+    private TimeSpan _trackDuration;
+    private DateTimeOffset _trackPositionCapturedAt;
+    private bool _trackIsPlaying;
 
     public TrackPopupWindow()
     {
@@ -38,14 +51,17 @@ public partial class TrackPopupWindow : Window
         _hideTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
         _hideTimer.Tick += OnHideTick;
 
-        // Some fullscreen/borderless games periodically refresh their own z-order. While the
-        // popup is visible, briefly reassert HWND_TOPMOST without ever activating the window.
-        // This is intentionally short-lived and stops as soon as the popup hides.
         _topmostPulseTimer = new DispatcherTimer(DispatcherPriority.Send, Dispatcher)
         {
             Interval = TopmostPulseInterval
         };
         _topmostPulseTimer.Tick += OnTopmostPulse;
+
+        _trackTimelineTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(200)
+        };
+        _trackTimelineTimer.Tick += OnTrackTimelineTick;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -54,76 +70,68 @@ public partial class TrackPopupWindow : Window
 
         _handle = new WindowInteropHelper(this).Handle;
 
-        // NOACTIVATE keeps the game focused. TOOLWINDOW keeps the popup out of Alt+Tab.
+        // NOACTIVATE keeps the game focused. TOOLWINDOW keeps the OSD out of Alt+Tab.
         // TRANSPARENT makes the passive overlay click-through at HWND level as well as WPF level.
         var style = NativeMethods.GetWindowLongPtr(_handle, NativeMethods.GWL_EXSTYLE).ToInt64();
         style |= NativeMethods.WS_EX_NOACTIVATE |
                  NativeMethods.WS_EX_TOOLWINDOW |
                  NativeMethods.WS_EX_TRANSPARENT;
         NativeMethods.SetWindowLongPtr(_handle, NativeMethods.GWL_EXSTYLE, new IntPtr(style));
-
-        // Do not ask DWM to draw a second rounded top-level frame here. The popup already
-        // has per-pixel rounded corners via WPF; mixing both can produce a pale outline.
     }
 
-    /// <summary>Updates the content and (re)starts the show plus auto-hide cycle. UI thread only.</summary>
+    /// <summary>Shows/restarts the normal track notification.</summary>
     public void ShowTrack(TrackInfo? track, ImageSource? artwork, TimeSpan duration, bool onActiveMonitor)
     {
-        var wasVisible = IsVisible && !_fadingOut;
+        var contentChanged = _mode != PopupMode.Track || KeyOf(track) != _shownKey;
+        _mode = PopupMode.Track;
 
-        Render(track, artwork);
-        _fadingOut = false;
+        TrackContent.Visibility = Visibility.Visible;
+        VolumeContent.Visibility = Visibility.Collapsed;
+        RenderTrack(track, artwork);
 
-        if (!IsVisible)
-        {
-            Show();
-        }
-
-        // Reinforce the non-activating Win32 show state. WPF ShowActivated=False normally does
-        // this already; the explicit call is useful when a fullscreen game owns the foreground.
-        if (_handle != IntPtr.Zero)
-        {
-            NativeMethods.ShowWindow(_handle, NativeMethods.SW_SHOWNOACTIVATE);
-        }
-
-        UpdateLayout();
-        Position(onActiveMonitor, forceZOrderCycle: true);
-
-        // Keep the popup above games that refresh their z-order during presentation.
-        _topmostPulseTimer.Stop();
-        _topmostPulseTimer.Start();
-
-        if (wasVisible)
-        {
-            PlayContentSwap();
-        }
-        else
-        {
-            PlayEntrance();
-        }
-
-        _hideTimer.Stop();
-        _hideTimer.Interval = duration;
-        _hideTimer.Start();
+        ShowCore(duration, onActiveMonitor, contentChanged);
     }
 
-    /// <summary>Content-only refresh: the auto-hide countdown keeps running.</summary>
+    /// <summary>
+    /// Shows a compact music-only volume OSD. Repeated key-repeat presses update this same
+    /// window and restart the timer, so holding Volume Up feels like a native volume overlay.
+    /// </summary>
+    public void ShowVolume(VolumeState state, TimeSpan duration, bool onActiveMonitor)
+    {
+        if (!state.IsAvailable)
+        {
+            return;
+        }
+
+        var contentChanged = _mode != PopupMode.Volume;
+        _mode = PopupMode.Volume;
+
+        TrackContent.Visibility = Visibility.Collapsed;
+        VolumeContent.Visibility = Visibility.Visible;
+        _trackTimelineTimer.Stop();
+        RenderVolume(state);
+
+        ShowCore(duration, onActiveMonitor, contentChanged);
+    }
+
+    /// <summary>Content-only track refresh; the auto-hide countdown keeps running.</summary>
     public void UpdateTrack(TrackInfo? track, ImageSource? artwork, bool onActiveMonitor)
     {
-        if (!IsVisible || _fadingOut)
+        if (!IsVisible || _fadingOut || _mode != PopupMode.Track)
         {
             return;
         }
 
         var changed = KeyOf(track) != _shownKey;
 
-        Render(track, artwork);
+        RenderTrack(track, artwork);
         UpdateLayout();
+        UpdateTrackTimelineVisual();
         Position(onActiveMonitor, forceZOrderCycle: false);
 
         if (changed)
         {
-            PlayContentSwap();
+            PlayTrackContentSwap();
         }
     }
 
@@ -131,13 +139,59 @@ public partial class TrackPopupWindow : Window
     {
         _hideTimer.Stop();
         _topmostPulseTimer.Stop();
+        _trackTimelineTimer.Stop();
         _fadingOut = false;
         BeginAnimation(OpacityProperty, null);
         Opacity = 0;
         Hide();
     }
 
-    private void Render(TrackInfo? track, ImageSource? artwork)
+    private void ShowCore(TimeSpan duration, bool onActiveMonitor, bool contentChanged)
+    {
+        var wasVisible = IsVisible && !_fadingOut;
+        _fadingOut = false;
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (_handle != IntPtr.Zero)
+        {
+            NativeMethods.ShowWindow(_handle, NativeMethods.SW_SHOWNOACTIVATE);
+        }
+
+        UpdateLayout();
+        if (_mode == PopupMode.Track)
+        {
+            UpdateTrackTimelineVisual();
+        }
+        Position(onActiveMonitor, forceZOrderCycle: true);
+
+        _topmostPulseTimer.Stop();
+        _topmostPulseTimer.Start();
+
+        if (!wasVisible)
+        {
+            PlayEntrance();
+        }
+        else if (contentChanged)
+        {
+            PlayCurrentContentSwap();
+        }
+        else if (_mode == PopupMode.Volume)
+        {
+            // A held volume hotkey should still provide a small visual acknowledgement even
+            // when the card stays in volume mode for the entire key-repeat burst.
+            VolumeHost.BeginAnimation(OpacityProperty, Animate(0.72, 1, TimeSpan.FromMilliseconds(90), EaseOut));
+        }
+
+        _hideTimer.Stop();
+        _hideTimer.Interval = duration;
+        _hideTimer.Start();
+    }
+
+    private void RenderTrack(TrackInfo? track, ImageSource? artwork)
     {
         var title = track?.Title ?? string.Empty;
         var artist = track?.Artist ?? string.Empty;
@@ -168,10 +222,123 @@ public partial class TrackPopupWindow : Window
         }
 
         _shownKey = KeyOf(track);
+        ConfigureTrackTimeline(track);
+    }
+
+    private void RenderVolume(VolumeState state)
+    {
+        var percent = Math.Clamp(state.Percent, 0, 100);
+
+        VolumeTitleText.Text = state.IsMuted ? "Music muted" : "Music volume";
+        VolumePlayerText.Text = state.Player;
+        VolumePercentText.Text = state.IsMuted ? "Muted" : percent + "%";
+        VolumeGlyphText.Text = state.IsMuted
+            ? "🔇"
+            : percent == 0
+                ? "🔈"
+                : percent < 50
+                    ? "🔉"
+                    : "🔊";
+
+        const double railHeight = 76.0;
+        VolumeFill.Height = railHeight * percent / 100.0;
+        VolumeFill.Opacity = state.IsMuted ? 0.32 : 1.0;
+        _shownKey = "volume\u001f" + state.Player + "\u001f" + percent + "\u001f" + state.IsMuted;
+    }
+
+    private void ConfigureTrackTimeline(TrackInfo? track)
+    {
+        _trackTimelineTimer.Stop();
+
+        if (track is null || track.Duration <= TimeSpan.Zero)
+        {
+            TrackTimelineHost.Visibility = Visibility.Collapsed;
+            TrackProgressFill.Width = 0;
+            TrackTimeText.Text = string.Empty;
+            return;
+        }
+
+        _trackDuration = track.Duration;
+        _trackPosition = ClampPosition(track.Position, track.Duration);
+        _trackPositionCapturedAt = DateTimeOffset.UtcNow;
+        _trackIsPlaying = track.IsPlaying;
+
+        TrackTimelineHost.Visibility = Visibility.Visible;
+        UpdateTrackTimelineVisual();
+
+        if (_trackIsPlaying)
+        {
+            _trackTimelineTimer.Start();
+        }
+    }
+
+    private void OnTrackTimelineTick(object? sender, EventArgs e)
+    {
+        if (!IsVisible || _fadingOut || _mode != PopupMode.Track || _trackDuration <= TimeSpan.Zero)
+        {
+            _trackTimelineTimer.Stop();
+            return;
+        }
+
+        UpdateTrackTimelineVisual();
+
+        if (CurrentTrackPosition() >= _trackDuration)
+        {
+            _trackTimelineTimer.Stop();
+        }
+    }
+
+    private void UpdateTrackTimelineVisual()
+    {
+        if (_trackDuration <= TimeSpan.Zero)
+        {
+            TrackTimelineHost.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var position = CurrentTrackPosition();
+        var ratio = Math.Clamp(position.TotalMilliseconds / _trackDuration.TotalMilliseconds, 0.0, 1.0);
+        var railWidth = TrackProgressRail.ActualWidth;
+        TrackProgressFill.Width = railWidth > 0 ? railWidth * ratio : 0;
+        TrackTimeText.Text = FormatTime(position) + " / " + FormatTime(_trackDuration);
+    }
+
+    private TimeSpan CurrentTrackPosition()
+    {
+        var position = _trackPosition;
+        if (_trackIsPlaying)
+        {
+            position += DateTimeOffset.UtcNow - _trackPositionCapturedAt;
+        }
+
+        return ClampPosition(position, _trackDuration);
+    }
+
+    private static TimeSpan ClampPosition(TimeSpan position, TimeSpan duration)
+    {
+        if (position < TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        if (duration > TimeSpan.Zero && position > duration)
+        {
+            return duration;
+        }
+
+        return position;
+    }
+
+    private static string FormatTime(TimeSpan value)
+    {
+        value = value < TimeSpan.Zero ? TimeSpan.Zero : value;
+        return value.TotalHours >= 1
+            ? $"{(int)value.TotalHours}:{value.Minutes:00}:{value.Seconds:00}"
+            : $"{(int)value.TotalMinutes}:{value.Seconds:00}";
     }
 
     private static string KeyOf(TrackInfo? track) =>
-        track is null ? string.Empty : track.ArtworkKey + "" + track.Status;
+        track is null ? string.Empty : track.ArtworkKey + "\u001f" + track.Status;
 
     private static string StatusGlyph(TrackInfo track) => track.IsPlaying ? "▶" : "⏸";
 
@@ -187,8 +354,19 @@ public partial class TrackPopupWindow : Window
         RootScale.BeginAnimation(ScaleTransform.ScaleYProperty, Animate(0.98, 1, RiseDuration, EaseOut));
     }
 
-    /// <summary>A new track while the popup is already up: nudge the art, don't re-enter.</summary>
-    private void PlayContentSwap()
+    private void PlayCurrentContentSwap()
+    {
+        if (_mode == PopupMode.Track)
+        {
+            PlayTrackContentSwap();
+            return;
+        }
+
+        VolumeHost.BeginAnimation(OpacityProperty, Animate(0.35, 1, ContentSwapDuration, EaseOut));
+        VolumeContent.BeginAnimation(OpacityProperty, Animate(0.6, 1, ContentSwapDuration, EaseOut));
+    }
+
+    private void PlayTrackContentSwap()
     {
         ArtworkScale.BeginAnimation(ScaleTransform.ScaleXProperty, Animate(0.94, 1, ContentSwapDuration, EaseOut));
         ArtworkScale.BeginAnimation(ScaleTransform.ScaleYProperty, Animate(0.94, 1, ContentSwapDuration, EaseOut));
@@ -199,6 +377,7 @@ public partial class TrackPopupWindow : Window
     {
         _hideTimer.Stop();
         _topmostPulseTimer.Stop();
+        _trackTimelineTimer.Stop();
         _fadingOut = true;
 
         RootOffset.BeginAnimation(TranslateTransform.YProperty, Animate(0, 4, FadeOutDuration, EaseIn));
@@ -232,8 +411,6 @@ public partial class TrackPopupWindow : Window
 
         try
         {
-            // Do not move the popup here; just keep its z-order asserted. Cycling through
-            // NOTOPMOST is reserved for the initial fullscreen show to avoid visible churn.
             NativeMethods.SetWindowPos(
                 _handle,
                 NativeMethods.HWND_TOPMOST,
@@ -250,7 +427,7 @@ public partial class TrackPopupWindow : Window
         catch (Exception ex)
         {
             _topmostPulseTimer.Stop();
-            Logger.Warn("Could not reassert track popup topmost state: " + ex.Message);
+            Logger.Warn("Could not reassert popup topmost state: " + ex.Message);
         }
     }
 
@@ -265,7 +442,7 @@ public partial class TrackPopupWindow : Window
     }
 
     /// <summary>
-    /// Places the popup bottom-right of the foreground monitor. If the foreground window fills
+    /// Places the OSD bottom-right of the foreground monitor. If the foreground window fills
     /// that monitor, use the complete monitor rectangle and a stronger one-time z-order cycle.
     /// </summary>
     private void Position(bool onActiveMonitor, bool forceZOrderCycle)
@@ -307,8 +484,6 @@ public partial class TrackPopupWindow : Window
             var dpi = NativeMethods.GetDpiForWindow(_handle);
             var scaleDpi = dpi == 0 ? 96 : dpi;
             var margin = (int)Math.Round(16.0 * scaleDpi / 96.0);
-
-            // The visible glass card is inset inside the transparent WPF window for its shadow.
             var inset = (int)Math.Round(12.0 * scaleDpi / 96.0);
 
             var x = target.Right - bounds.Width - margin + inset;
@@ -316,9 +491,6 @@ public partial class TrackPopupWindow : Window
 
             if (_gameOverlayMode && forceZOrderCycle)
             {
-                // A NOTOPMOST -> TOPMOST cycle makes Windows rebuild the z-order relationship
-                // after a fullscreen swap-chain window has taken over the monitor. NOACTIVATE
-                // ensures Dota/the game remains the foreground application throughout.
                 NativeMethods.SetWindowPos(
                     _handle,
                     NativeMethods.HWND_NOTOPMOST,
@@ -345,7 +517,7 @@ public partial class TrackPopupWindow : Window
         }
         catch (Exception ex)
         {
-            Logger.Warn("Could not position the track popup: " + ex.Message);
+            Logger.Warn("Could not position popup: " + ex.Message);
         }
     }
 
@@ -356,9 +528,6 @@ public partial class TrackPopupWindow : Window
             return false;
         }
 
-        // Borderless/fullscreen windows can differ from the monitor by a pixel or two because
-        // of scaling/rounding. A small tolerance catches those without classifying maximized
-        // desktop windows that stop at the taskbar as fullscreen.
         const int tolerance = 3;
         return Math.Abs(window.Left - monitor.Left) <= tolerance &&
                Math.Abs(window.Top - monitor.Top) <= tolerance &&

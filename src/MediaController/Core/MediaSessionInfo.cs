@@ -26,7 +26,9 @@ public sealed record TrackInfo(
     string Album,
     string Status,
     bool IsPlaying,
-    IRandomAccessStreamReference? Thumbnail)
+    IRandomAccessStreamReference? Thumbnail,
+    TimeSpan Position,
+    TimeSpan Duration)
 {
     public bool HasTrack => Title.Length > 0 || Artist.Length > 0;
 

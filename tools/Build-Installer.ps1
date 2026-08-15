@@ -16,13 +16,13 @@ $vpkVersion = "1.2.0"
 if ([string]::IsNullOrWhiteSpace($Version)) {
     [xml]$projectXml = Get-Content $project
     $defaultVersion = [string]($projectXml.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
-    if ([string]::IsNullOrWhiteSpace($defaultVersion)) { $defaultVersion = "0.5.0" }
+    if ([string]::IsNullOrWhiteSpace($defaultVersion)) { $defaultVersion = "0.5.1" }
     $enteredVersion = Read-Host "Release version [$defaultVersion]"
     $Version = if ([string]::IsNullOrWhiteSpace($enteredVersion)) { $defaultVersion } else { $enteredVersion.Trim() }
 }
 
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$') {
-    throw "Version must be SemVer, for example 0.5.0"
+    throw "Version must be SemVer, for example 0.5.1"
 }
 
 Write-Host ""
