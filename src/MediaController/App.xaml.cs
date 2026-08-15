@@ -40,6 +40,7 @@ public partial class App : Application
     private TrayIconService _trayService = null!;
     private MediaArtworkService _artworkService = null!;
     private TrackPopupService _popupService = null!;
+    private GameBarBridgeService _gameBarBridgeService = null!;
     private VolumeService _volumeService = null!;
     private UpdateService _updateService = null!;
 
@@ -101,10 +102,12 @@ public partial class App : Application
         _volumeService = new VolumeService(_sessionService);
         _artworkService = new MediaArtworkService();
         _updateService = new UpdateService();
+        _gameBarBridgeService = new GameBarBridgeService();
+        _gameBarBridgeService.Start();
 
         // Subscribes to MediaControlService.ActionCompleted, so hotkeys and the Settings
         // test buttons both raise the popup without either of them knowing about it.
-        _popupService = new TrackPopupService(_sessionService, _controlService, _artworkService, _settingsService, Dispatcher);
+        _popupService = new TrackPopupService(_sessionService, _controlService, _artworkService, _settingsService, _gameBarBridgeService, Dispatcher);
 
         _trayService = new TrayIconService(_sessionService, _settingsService, _startupService);
         _trayService.SettingsRequested += ShowSettings;
@@ -168,6 +171,7 @@ public partial class App : Application
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
             _popupService?.Dispose();
+            _gameBarBridgeService?.Dispose();
             _controlService?.Dispose();
             _updateService?.Dispose();
             _sessionService?.Dispose();

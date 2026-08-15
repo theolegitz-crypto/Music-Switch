@@ -6,3 +6,5 @@ publish/
 Releases/
 *.user
 *.suo
+
+.local/

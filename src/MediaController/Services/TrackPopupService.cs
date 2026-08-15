@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Threading;
 using MediaController.Core;
+using MediaController.Native;
 using MediaController.UI;
 
 namespace MediaController.Services;
@@ -23,6 +24,7 @@ public sealed class TrackPopupService : IDisposable
     private readonly MediaControlService _control;
     private readonly MediaArtworkService _artwork;
     private readonly SettingsService _settings;
+    private readonly GameBarBridgeService _gameBar;
     private readonly Dispatcher _dispatcher;
 
     private TrackPopupWindow? _window;
@@ -34,12 +36,14 @@ public sealed class TrackPopupService : IDisposable
         MediaControlService control,
         MediaArtworkService artwork,
         SettingsService settings,
+        GameBarBridgeService gameBar,
         Dispatcher dispatcher)
     {
         _sessions = sessions;
         _control = control;
         _artwork = artwork;
         _settings = settings;
+        _gameBar = gameBar;
         _dispatcher = dispatcher;
 
         _control.ActionCompleted += OnActionCompleted;
@@ -270,13 +274,21 @@ public sealed class TrackPopupService : IDisposable
         try
         {
             var settings = _settings.Current;
-            var window = _window ??= new TrackPopupWindow();
+            var duration = TimeSpan.FromSeconds(Math.Clamp(settings.TrackPopupDurationSeconds, 0.5, 10.0));
 
-            window.ShowTrack(
-                track,
-                artwork,
-                TimeSpan.FromSeconds(Math.Clamp(settings.TrackPopupDurationSeconds, 0.5, 10.0)),
-                settings.ShowPopupOnActiveMonitor);
+            // A connected/pinned Game Bar widget is preferred only for a fullscreen foreground
+            // window. Normal desktop/windowed use keeps the lightweight WPF popup. Borderless
+            // fullscreen also routes through Game Bar once the widget is pinned, which avoids
+            // duplicate overlays and keeps one rendering path for all game fullscreen modes.
+            if (_gameBar.IsConnected && IsForegroundFullscreen())
+            {
+                _window?.HideNow();
+                _gameBar.Publish(track, artwork, duration);
+                return;
+            }
+
+            var window = _window ??= new TrackPopupWindow();
+            window.ShowTrack(track, artwork, duration, settings.ShowPopupOnActiveMonitor);
         }
         catch (Exception ex)
         {
@@ -288,11 +300,61 @@ public sealed class TrackPopupService : IDisposable
     {
         try
         {
-            _window?.UpdateTrack(track, artwork, _settings.Current.ShowPopupOnActiveMonitor);
+            var settings = _settings.Current;
+            if (_gameBar.IsConnected && IsForegroundFullscreen())
+            {
+                _window?.HideNow();
+                _gameBar.Publish(
+                    track,
+                    artwork,
+                    TimeSpan.FromSeconds(Math.Clamp(settings.TrackPopupDurationSeconds, 0.5, 10.0)));
+                return;
+            }
+
+            _window?.UpdateTrack(track, artwork, settings.ShowPopupOnActiveMonitor);
         }
         catch (Exception ex)
         {
             Logger.Warn("Could not update the track popup: " + ex.Message);
+        }
+    }
+
+    private static bool IsForegroundFullscreen()
+    {
+        try
+        {
+            var foreground = NativeMethods.GetForegroundWindow();
+            if (foreground == IntPtr.Zero || !NativeMethods.GetWindowRect(foreground, out var window))
+            {
+                return false;
+            }
+
+            var monitor = NativeMethods.MonitorFromWindow(foreground, NativeMethods.MONITOR_DEFAULTTONEAREST);
+            if (monitor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var info = new NativeMethods.MONITORINFO
+            {
+                cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>()
+            };
+
+            if (!NativeMethods.GetMonitorInfo(monitor, ref info))
+            {
+                return false;
+            }
+
+            const int tolerance = 8;
+            var screen = info.rcMonitor;
+            return Math.Abs(window.Left - screen.Left) <= tolerance &&
+                   Math.Abs(window.Top - screen.Top) <= tolerance &&
+                   Math.Abs(window.Right - screen.Right) <= tolerance &&
+                   Math.Abs(window.Bottom - screen.Bottom) <= tolerance;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

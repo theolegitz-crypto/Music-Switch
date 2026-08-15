@@ -1,0 +1,11 @@
+<Application
+    x:Class="MediaController.GameBar.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FFF7F3FF"/>
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FFB9AEC5"/>
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#FF8D8199"/>
+        <SolidColorBrush x:Key="PurpleBrush" Color="#FFA970FF"/>
+    </Application.Resources>
+</Application>

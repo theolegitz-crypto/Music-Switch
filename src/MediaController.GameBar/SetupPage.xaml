@@ -1,0 +1,33 @@
+<Page
+    x:Class="MediaController.GameBar.SetupPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#FF100D17">
+    <Grid>
+        <StackPanel MaxWidth="560" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="Music Switch — Game Bar Overlay"
+                       Foreground="{StaticResource PrimaryTextBrush}"
+                       FontSize="25"
+                       FontWeight="SemiBold"/>
+            <TextBlock Margin="0,14,0,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       FontSize="14"
+                       TextWrapping="Wrap"
+                       Text="This companion displays Music Switch track notifications inside Xbox Game Bar, including over supported fullscreen games."/>
+
+            <Border Margin="0,24,0,0" Padding="18" CornerRadius="16" Background="#FF24182F" BorderBrush="#20FFFFFF" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="One-time setup" Foreground="{StaticResource PrimaryTextBrush}" FontSize="16" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,10,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"
+                               Text="1. Keep the normal Media Controller desktop app running.&#10;2. Press Win + G.&#10;3. Open the Widget menu and select Music Switch.&#10;4. Pin the widget.&#10;5. In Game Bar, enable click-through for the pinned widget if you do not want it to intercept the mouse."/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Margin="0,20,0,0"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Text="When the widget is connected, fullscreen notifications are routed through Game Bar automatically. Windowed and normal desktop notifications continue to use the existing WPF popup."/>
+        </StackPanel>
+    </Grid>
+</Page>
