@@ -48,3 +48,10 @@ Regular IDE / `dotnet run` builds intentionally have updates disabled because th
 - Win32 `RegisterHotKey`
 - `SendInput` media-key fallback
 - Velopack 1.2.0 for installer and updates
+
+## v0.4.1 launch behaviour
+
+- Normal launch from the Start menu / desktop shortcut opens Settings.
+- `--background` starts quietly in the notification area and is used by **Start with Windows**.
+- Starting Media Controller again while it is already running signals the existing process to open/restore Settings.
+- `Assets/MediaController.ico` is a multi-resolution Windows icon used by the executable, Settings window, tray icon and Velopack installer.

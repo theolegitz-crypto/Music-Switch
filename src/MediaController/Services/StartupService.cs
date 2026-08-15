@@ -40,9 +40,11 @@ public sealed class StartupService
                 return false;
             }
 
-            // Quoted so paths with spaces survive.
-            key.SetValue(ValueName, "\"" + exe + "\"", RegistryValueKind.String);
-            Logger.Info($"Start with Windows enabled -> \"{exe}\"");
+            // Manual launch opens Settings. Windows startup explicitly requests background mode.
+            // The executable is quoted so paths with spaces survive.
+            var command = "\"" + exe + "\" --background";
+            key.SetValue(ValueName, command, RegistryValueKind.String);
+            Logger.Info($"Start with Windows enabled -> {command}");
             return true;
         }
         catch (Exception ex)

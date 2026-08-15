@@ -15,9 +15,10 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\MediaController.ico</ApplicationIcon>
 
-    <!-- v0.4 distribution metadata -->
-    <Version>0.4.0</Version>
+    <!-- v0.4.1: app icon + manual-launch Settings + single-instance activation -->
+    <Version>0.4.1</Version>
 
     <!-- Velopack must run before WPF's generated entry point, so App.xaml is a normal Page
          and App.xaml.cs owns Main(). -->
@@ -33,6 +34,11 @@
     <!-- WinForms is enabled only for System.Windows.Forms.NotifyIcon (tray icon). -->
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF also needs the icon as a resource so Settings can use the same artwork. -->
+    <Resource Include="Assets\MediaController.ico" />
   </ItemGroup>
 
   <ItemGroup>

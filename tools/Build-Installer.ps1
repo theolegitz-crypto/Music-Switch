@@ -10,6 +10,7 @@ $artifacts = Join-Path $root "artifacts"
 $publish = Join-Path $artifacts "publish"
 $releases = Join-Path $artifacts "Releases"
 $notes = Join-Path $root "RELEASE_NOTES.md"
+$icon = Join-Path $root "src\MediaController\Assets\MediaController.ico"
 $vpkVersion = "1.2.0"
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -90,6 +91,7 @@ $args = @(
     "--packDir", $publish,
     "--mainExe", "MediaController.exe",
     "--packTitle", "Media Controller",
+    "--icon", $icon,
     "--runtime", "win-x64",
     "--outputDir", $releases
 )

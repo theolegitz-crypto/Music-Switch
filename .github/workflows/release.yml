@@ -76,6 +76,7 @@ jobs:
             --packDir publish `
             --mainExe MediaController.exe `
             --packTitle "Media Controller" `
+            --icon src/MediaController/Assets/MediaController.ico `
             --runtime win-x64 `
             --releaseNotes RELEASE_NOTES.md `
             --outputDir Releases

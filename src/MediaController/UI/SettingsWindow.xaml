@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MediaController.UI.Controls"
         Title="Media Controller"
+        Icon="/MediaController;component/Assets/MediaController.ico"
         Width="500"
         Height="900"
         MinWidth="460"

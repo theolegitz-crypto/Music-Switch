@@ -7,25 +7,28 @@ using Velopack;
 namespace MediaController;
 
 /// <summary>
-/// Starts straight into the tray: no main window, no startup flash, no stolen focus.
+/// Manual launches open Settings; Windows startup uses --background and stays in the tray.
 /// ShutdownMode is OnExplicitShutdown (App.xaml), so closing Settings never exits the app.
 /// </summary>
 public partial class App : Application
 {
+    private const string BackgroundArgument = "--background";
+    private static string[] _launchArguments = Array.Empty<string>();
+
     [STAThread]
     private static void Main(string[] args)
     {
         // Velopack must run before the WPF application and before our single-instance mutex.
         VelopackApp.Build().Run();
 
+        _launchArguments = args;
+
         var app = new App();
         app.InitializeComponent();
         app.Run();
     }
 
-    private const string MutexName = @"Local\MediaController.SingleInstance";
-
-    private System.Threading.Mutex? _instanceMutex;
+    private SingleInstanceService? _singleInstance;
 
     private SettingsService _settingsService = null!;
     private StartupService _startupService = null!;
@@ -44,12 +47,24 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _instanceMutex = new System.Threading.Mutex(initiallyOwned: true, MutexName, out var createdNew);
-        if (!createdNew)
+        var backgroundLaunch = _launchArguments.Any(arg =>
+            string.Equals(arg, BackgroundArgument, StringComparison.OrdinalIgnoreCase));
+
+        _singleInstance = new SingleInstanceService();
+        if (!_singleInstance.TryAcquire())
         {
-            Logger.Info("Another instance is already running; this one exits immediately.");
-            _instanceMutex.Dispose();
-            _instanceMutex = null;
+            if (!backgroundLaunch)
+            {
+                Logger.Info("Another instance is running; asking it to open Settings.");
+                SingleInstanceService.RequestOpenSettings();
+            }
+            else
+            {
+                Logger.Info("Background startup found an existing instance; exiting quietly.");
+            }
+
+            _singleInstance.Dispose();
+            _singleInstance = null;
             Shutdown();
             return;
         }
@@ -109,12 +124,29 @@ public partial class App : Application
                 ". Open Settings from the tray icon to pick different combinations.");
         }
 
-        if (settings.StartWithWindows != _startupService.IsEnabled())
+        // Re-apply the enabled startup entry so existing v0.4.0 installs are migrated from
+        // a plain executable command to "MediaController.exe --background". Manual launches
+        // open Settings; Windows startup must stay quiet in the tray.
+        if (settings.StartWithWindows)
         {
-            _startupService.Apply(settings.StartWithWindows);
+            _startupService.Enable();
+        }
+        else if (_startupService.IsEnabled())
+        {
+            _startupService.Disable();
         }
 
         _ = _sessionService.InitializeAsync();
+
+        // Only start listening after all services required by ShowSettings exist. The named
+        // AutoResetEvent keeps an early second-launch signal pending until this listener starts.
+        _singleInstance!.StartOpenSettingsListener(() =>
+            Dispatcher.BeginInvoke(new Action(ShowSettings)));
+
+        if (!backgroundLaunch)
+        {
+            Dispatcher.BeginInvoke(new Action(ShowSettings));
+        }
 
         if (settings.CheckForUpdatesAutomatically)
         {
@@ -139,17 +171,8 @@ public partial class App : Application
         }
         finally
         {
-            try
-            {
-                _instanceMutex?.ReleaseMutex();
-            }
-            catch
-            {
-                // Not owned - nothing to release.
-            }
-
-            _instanceMutex?.Dispose();
-            _instanceMutex = null;
+            _singleInstance?.Dispose();
+            _singleInstance = null;
             base.OnExit(e);
         }
     }
@@ -160,6 +183,16 @@ public partial class App : Application
     {
         if (_settingsWindow is not null)
         {
+            if (_settingsWindow.WindowState == WindowState.Minimized)
+            {
+                _settingsWindow.WindowState = WindowState.Normal;
+            }
+
+            if (!_settingsWindow.IsVisible)
+            {
+                _settingsWindow.Show();
+            }
+
             _settingsWindow.Activate();
             return;
         }
