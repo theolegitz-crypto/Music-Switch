@@ -1,0 +1,92 @@
+name: Build installer and publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, for example 0.4.1"
+        required: true
+        default: "0.4.1"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}"
+          } else {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$') {
+            throw "Invalid SemVer: $version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish application
+        shell: pwsh
+        run: |
+          dotnet publish src/MediaController/MediaController.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o publish `
+            /p:Version=${{ steps.version.outputs.version }}
+          Set-Content -Path publish/update-source.txt `
+            -Value "https://github.com/${{ github.repository }}" `
+            -Encoding UTF8
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: dotnet tool install -g vpk --version 1.2.0
+
+      - name: Download previous release
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          vpk download github `
+            --repoUrl https://github.com/${{ github.repository }} `
+            --token ${{ secrets.GITHUB_TOKEN }} `
+            --outputDir Releases
+
+      - name: Pack release
+        shell: pwsh
+        run: |
+          vpk pack `
+            --packId MediaController.Desktop `
+            --packVersion ${{ steps.version.outputs.version }} `
+            --packDir publish `
+            --mainExe MediaController.exe `
+            --packTitle "Media Controller" `
+            --runtime win-x64 `
+            --releaseNotes RELEASE_NOTES.md `
+            --outputDir Releases
+
+      - name: Publish to GitHub Releases
+        shell: pwsh
+        run: |
+          vpk upload github `
+            --repoUrl https://github.com/${{ github.repository }} `
+            --token ${{ secrets.GITHUB_TOKEN }} `
+            --publish `
+            --releaseName "Media Controller ${{ steps.version.outputs.version }}" `
+            --tag "v${{ steps.version.outputs.version }}" `
+            --outputDir Releases
